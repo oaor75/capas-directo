@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="robots" content="noindex,nofollow">
+<meta name="viewport" content="width=1080, height=1920">
+<title>Luces OlgaDev</title>
+<!--
+  Capa de directo OlgaDev · «luces de cristal» (Lumi, 14/11/2026)
+  Inspirado en el efecto de luces de TikTok LIVE, con los colores de OlgaDev y el letrero de cristal arriba.
+  Fondo TRANSPARENTE: se añade como fuente de navegador (OBS / TikTok LIVE Studio) encima de la cámara, 1080×1920.
+  Parámetros en la dirección:
+    ?banda=02        letrero (01 IA · 02 apps · 03 imágenes · 04 automatizar · 05 agente · 06 vídeos · 07 web · 08 busco personas · 0 sin letrero)
+    &mic=1           las barras bailan con tu voz (pide permiso del micrófono)
+    &prueba=1        pone una foto de fondo para ver cómo queda
+    &lados=0         quita los tubos de luz de los lados
+-->
+<style>
+  :root { --violeta:#7c3aed; --lila:#a78bfa; --morado:#5b21b6; --amarillo:#ffd935; --tinta:#0f0b1a; }
+  html, body { margin:0; width:1080px; height:1920px; overflow:hidden; background:transparent; }
+  body.marca { background: radial-gradient(circle at 50% 58%, #e4d9fb 0%, #c4b0f5 14%, #9b74f0 30%, #7c3aed 46%, #5b21b6 66%, #0f0b1a 100%); }
+  body.prueba { background:#3a2f4f; }
+  canvas { position:absolute; left:0; top:0; width:1080px; height:1920px; }
+  #banda { position:absolute; left:30px; top:14px; width:1020px; filter:drop-shadow(0 18px 40px rgba(124,58,237,.55)); }
+  #banda.oculta { display:none; }
+</style>
+</head>
+<body>
+<canvas id="c" width="1080" height="1920"></canvas>
+<img id="banda" alt="">
+<script>
+const q = new URLSearchParams(location.search);
+const BANDAS = {"01":"banda-01-ia-tiempo-vender","02":"banda-02-crear-apps","03":"banda-03-imagenes-ingresos","04":"banda-04-automatizar",
+                "05":"banda-05-agente-ia","06":"banda-06-videos-redes","07":"banda-07-web-que-vende","08":"banda-08-busco-personas"};
+const b = q.get("banda") ?? "02";
+const img = document.getElementById("banda");
+if (BANDAS[b]) img.src = "bandas/" + BANDAS[b] + ".png"; else img.classList.add("oculta");
+if (q.get("fondo") === "marca") document.body.classList.add("marca");
+if (q.get("prueba") === "1") { document.body.classList.add("prueba"); }
+const LADOS = q.get("lados") !== "0";
+
+const cv = document.getElementById("c"), g = cv.getContext("2d");
+const W = 1080, H = 1920, N = 72, ZONA = 760;          // barras y altura máxima de la zona baja
+const gap = W / N, ancho = gap * 0.42;
+let nivel = new Float32Array(N), objetivo = new Float32Array(N), voz = 0;
+
+// forma en U: altas en los lados, bajas en el centro (la cara queda libre)
+const forma = i => { const x = (i + .5) / N * 2 - 1; return 0.18 + 0.82 * Math.pow(Math.abs(x), 1.6); };
+
+// micrófono opcional
+let analizador = null, datos = null;
+if (q.get("mic") === "1" && navigator.mediaDevices) {
+  navigator.mediaDevices.getUserMedia({ audio: true }).then(s => {
+    const ac = new AudioContext(), src = ac.createMediaStreamSource(s);
+    analizador = ac.createAnalyser(); analizador.fftSize = 256; src.connect(analizador);
+    datos = new Uint8Array(analizador.frequencyBinCount);
+  }).catch(() => {});
+}
+
+function degradado(y0, y1, a) {
+  const gr = g.createLinearGradient(0, y0, 0, y1);
+  gr.addColorStop(0, `rgba(255,217,53,${0.95*a})`);      // punta amarilla
+  gr.addColorStop(0.12, `rgba(221,214,254,${0.95*a})`);  // lila claro
+  gr.addColorStop(0.45, `rgba(167,139,250,${0.75*a})`);  // lila
+  gr.addColorStop(0.8, `rgba(124,58,237,${0.55*a})`);    // violeta
+  gr.addColorStop(1, `rgba(91,33,182,${0.15*a})`);       // morado que se funde
+  return gr;
+}
+
+function frame(t) {
+  t /= 1000;
+  if (analizador) {
+    analizador.getByteFrequencyData(datos);
+    let s = 0; for (let k = 2; k < 40; k++) s += datos[k]; voz = voz * 0.7 + (s / 38 / 255) * 0.3;
+  }
+  for (let i = 0; i < N; i++) {
+    const ondas = 0.5 + 0.25 * Math.sin(t * 2.1 + i * 0.37) + 0.15 * Math.sin(t * 3.7 - i * 0.61) + 0.1 * Math.sin(t * 6.3 + i * 1.7);
+    const extra = analizador ? voz * 1.6 * (0.6 + 0.4 * Math.sin(i * 2.3 + t * 9)) : 0;
+    objetivo[i] = Math.min(1, forma(i) * (0.55 + 0.45 * ondas) + extra * forma(i));
+    nivel[i] += (objetivo[i] - nivel[i]) * 0.18;
+  }
+  g.clearRect(0, 0, W, H);
+
+  // halo de fondo de la zona baja
+  const halo = g.createLinearGradient(0, H - ZONA, 0, H);
+  halo.addColorStop(0, "rgba(124,58,237,0)"); halo.addColorStop(1, "rgba(124,58,237,0.38)");
+  g.fillStyle = halo; g.fillRect(0, H - ZONA, W, ZONA);
+
+  // tubos de luz en los lados (como tus lámparas)
+  if (LADOS) {
+    const pulso = 0.75 + 0.25 * Math.sin(t * 1.6);
+    for (const x of [26, W - 26]) {
+      g.save(); g.shadowColor = "rgba(167,139,250,0.95)"; g.shadowBlur = 60 * pulso;
+      const tg = g.createLinearGradient(0, 120, 0, H);
+      tg.addColorStop(0, "rgba(255,255,255,0)"); tg.addColorStop(0.15, `rgba(237,231,251,${0.9*pulso})`);
+      tg.addColorStop(0.7, `rgba(167,139,250,${0.9*pulso})`); tg.addColorStop(1, "rgba(124,58,237,0.6)");
+      g.fillStyle = tg; g.beginPath(); g.roundRect(x - 9, 120, 18, H - 120, 9); g.fill(); g.restore();
+    }
+  }
+
+  // barras: primero el resplandor, luego la barra nítida (efecto cristal)
+  for (const pase of [0, 1]) {
+    g.save();
+    if (pase === 0) { g.filter = "blur(14px)"; g.globalAlpha = 0.85; }
+    for (let i = 0; i < N; i++) {
+      const h = nivel[i] * ZONA, x = i * gap + (gap - ancho) / 2, y = H - h;
+      g.fillStyle = degradado(y, H, pase === 0 ? 0.9 : 1);
+      g.beginPath(); g.roundRect(x, y, pase === 0 ? ancho * 1.8 : ancho, h, ancho / 2); g.fill();
+      if (pase === 1) {                       // brillo de cristal en la punta
+        g.fillStyle = "rgba(255,255,255,0.85)"; g.fillRect(x + ancho * 0.2, y + 3, ancho * 0.25, Math.min(26, h * 0.3));
+      }
+    }
+    g.restore();
+  }
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>
